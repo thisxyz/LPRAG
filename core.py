@@ -173,24 +173,35 @@ class PrivacyPerturbator:
             ent_text = ent.text
             ent_label = ent.label_
 
-            if any(w.lower() in self.skip_words for w in ent_text.split()):
-                continue
-
             if re.fullmatch(r'[-+]?\d*\.\d+|\d+', ent_text):
+                epsilon = privacy_budgets.get(ent_text, self.total_epsilon / 10)
                 is_discrete = self._is_discrete_context(ent_text, ent_label)
-                epsilon = privacy_budgets.get(self.tokenizer.tokenize(ent_text)[0], self.total_epsilon / 10)
                 perturbed = self._perturb_number(float(ent_text), epsilon, is_discrete, entity_label=ent_label)
                 perturbed_text = perturbed_text.replace(ent_text, str(perturbed), 1)
+                continue
 
-            else:
-                tokens = self.tokenizer.tokenize(ent_text)
-                perturbed_tokens = []
-                for tok in tokens:
+            tokens = ent_text.split()
+            perturbed_tokens = []
+
+            for tok in tokens:
+                tok_lower = tok.lower()
+
+                if tok_lower in self.skip_words:
+                    perturbed_tokens.append(tok)
+                    continue
+
+                if re.fullmatch(r'[-+]?\d*\.\d+|\d+', tok):
                     epsilon = privacy_budgets.get(tok, self.total_epsilon / 10)
-                    perturbed_tok = self._perturb_word(tok, epsilon)
-                    perturbed_tokens.append(perturbed_tok)
-                perturbed_ent = self.tokenizer.convert_tokens_to_string(perturbed_tokens)
-                perturbed_text = perturbed_text.replace(ent_text, perturbed_ent, 1)
+                    is_discrete = self._is_discrete_context(tok, ent_label)
+                    perturbed = self._perturb_number(float(tok), epsilon, is_discrete, entity_label=ent_label)
+                    perturbed_tokens.append(str(perturbed))
+                else:
+                    epsilon = privacy_budgets.get(tok, self.total_epsilon / 10)
+                    perturbed = self._perturb_word(tok, epsilon)
+                    perturbed_tokens.append(perturbed)
+
+            perturbed_ent = ' '.join(perturbed_tokens)
+            perturbed_text = perturbed_text.replace(ent_text, perturbed_ent, 1)
 
         return perturbed_text
 
@@ -201,4 +212,3 @@ if __name__ == "__main__":
     perturbed = perturbator.perturb(original)
     print("Original: ", original)
     print("Perturbed:", perturbed)
-
